@@ -3,42 +3,96 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SIAKAD Terpadu - Sistem Informasi Akademik</title>
+    <title>SIAKAD v4.5 - Sistem Informasi Akademik Terpadu</title>
+    
+    <!-- Link External: Tailwind CSS & Font Awesome Icons -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <style>
-        .animate-fade-in { animation: fadeIn 0.3s ease-in-out; }
+        /* Animasi halusan saat perpindahan tab */
+        .animate-fade-in { animation: fadeIn 0.4s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Menghilangkan scrollbar tapi fungsi scroll tetap aktif */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         
+        /* Menghilangkan panah pada input number */
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
+        /* Style untuk notifikasi (Toast) */
         #toast {
             position: fixed;
             bottom: 2rem;
             right: 2rem;
-            padding: 1rem 2rem;
-            border-radius: 1rem;
+            padding: 1.2rem 2.5rem;
+            border-radius: 1.2rem;
             color: white;
-            font-weight: bold;
-            z-index: 200;
+            font-weight: 800;
+            z-index: 999;
             display: none;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            transition: all 0.3s ease;
+        }
+
+        /* Gradient Background untuk Login */
+        .bg-login-gradient {
+            background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+        }
+        
+        .card-shadow {
+            box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.05);
         }
     </style>
 </head>
-<body class="bg-gray-50 text-gray-800 font-sans" onload="initApp()">
+<body class="bg-gray-50 text-gray-800 font-sans leading-relaxed">
 
-    <div id="toast"></div>
-    <div id="app" class="min-h-screen"></div>
+    <!-- Kontainer Notifikasi -->
+    <div id="toast" class="animate-bounce"></div>
 
+    <!-- Kontainer Utama Aplikasi -->
+    <div id="app" class="min-h-screen w-full">
+        <!-- Loader Awal: Muncul saat sinkronisasi database -->
+        <div id="global-loader" class="flex flex-col items-center justify-center min-h-screen bg-blue-900 text-white">
+            <div class="relative">
+                <div class="w-24 h-24 border-4 border-blue-400 border-t-white rounded-full animate-spin"></div>
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <i class="fas fa-university text-2xl"></i>
+                </div>
+            </div>
+            <h1 class="text-3xl font-black mt-8 tracking-tighter italic">SIAKAD CLOUD</h1>
+            <p id="status-info" class="text-blue-200 text-sm mt-3 opacity-70 font-medium uppercase tracking-widest">Sinkronisasi Data...</p>
+            
+            <div id="emergency-btn" class="mt-12 hidden animate-fade-in text-center">
+                <p class="text-xs text-blue-400 mb-4 italic max-w-xs">Koneksi lambat? Pastikan Firebase Rules Anda 'allow read, write: if true;'.</p>
+                <button onclick="window.forceDemoMode()" class="bg-white/10 hover:bg-white/20 text-white border border-white/30 py-4 px-10 rounded-2xl font-bold transition-all transform active:scale-95">
+                    Gunakan Mode Demo (Offline)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK & Application Logic -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- KONFIGURASI ---
-        const SUBJECTS = ['Matematika', 'B. Indonesia', 'IPA', 'IPS', 'B. Inggris', 'PJOK', 'Seni Budaya'];
+        // --- KONFIGURASI FIREBASE ALFAN ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyDXwDDOevS1D-ve6MLVZpmT5jyfMeEsoSg",
+            authDomain: "web-siakad.firebaseapp.com",
+            projectId: "web-siakad",
+            storageBucket: "web-siakad.firebasestorage.app",
+            messagingSenderId: "347368315268",
+            appId: "1:347368315268:web:0eb8938c23eb629b2065d1",
+            measurementId: "G-YD49Q3YJ0L"
+        };
+
+        // --- DATA KONSTANTA ---
+        const SUBJECTS = ['Matematika', 'Bahasa Indonesia', 'IPA', 'IPS', 'Bahasa Inggris', 'PJOK', 'Seni Budaya'];
         const GRADE_COMPONENTS = [
             { id: 'keaktifan', label: 'Keaktifan' },
             { id: 'tugas', label: 'Tugas' },
@@ -46,48 +100,53 @@
             { id: 'kesopanan', label: 'Kesopanan' }
         ];
 
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'siakad-v3-final';
-
-        const INITIAL_STATE = {
+        // --- STATE AWAL (DATA DEFAULT) ---
+        const INITIAL_DB = {
             users: {
-                'admin': { id: 'u0', username: 'admin', password: '123', role: 'admin', name: 'Super Admin' },
+                'admin': { id: 'u0', username: 'admin', password: '123', role: 'admin', name: 'Alfan Admin' },
                 'guru': { id: 'u1', username: 'guru', password: '123', role: 'guru', name: 'Drs. Bambang', subject: 'Matematika' },
                 'siswa': { id: 'u2', username: 'siswa', password: '123', role: 'siswa', name: 'Budi Santoso', nis: '10001' }
             },
-            students: [
-                { id: 'u2', name: 'Budi Santoso', nis: '10001' }
-            ],
-            grades: {
-                'u2': { 'Matematika': { keaktifan: 80, tugas: 85, kehadiran: 90, kesopanan: 95 } }
-            },
-            attendance: {
-                'u2': { present: 42, total: 48 }
-            },
+            students: [{ id: 'u2', name: 'Budi Santoso', nis: '10001' }],
+            grades: {}, 
+            attendance: {}, 
             history: {
                 'u2': { avg: 85, attendance: '98%' }
             }
         };
 
+        // --- GLOBAL STATE ---
         let state = {
-            ...INITIAL_STATE,
+            ...INITIAL_DB,
             user: null, 
             activeTab: 'dashboard',
             activeToken: null,
             attendedToday: [], 
             editingUser: null,
-            isLoading: true
+            isLoading: true,
+            isOffline: false
         };
 
-        // --- CORE FUNCTIONS ---
-        async function syncToCloud() {
-            if (!auth.currentUser) return;
+        let db, auth;
+
+        // --- FUNGSI UTAMA (CORE) ---
+
+        setTimeout(() => {
+            const btn = document.getElementById('emergency-btn');
+            if (state.isLoading && btn) btn.classList.remove('hidden');
+        }, 7000);
+
+        window.forceDemoMode = () => {
+            showToast("Masuk ke Mode Demo (Data tidak disimpan ke Cloud)");
+            updateState({ isLoading: false, isOffline: true });
+        };
+
+        // SINKRONISASI DATA KE CLOUD
+        async function pushToCloud() {
+            if (state.isOffline || !auth?.currentUser) return;
             try {
-                // Jalur 6 segmen (Genap): artifacts -> appId -> public -> data -> siakad_db -> state_document
-                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'siakad_db', 'state_document');
+                // Menentukan jalur dokumen (6 segmen aman)
+                const docRef = doc(db, 'siakad_data', 'main_records', 'v4_5_system', 'global_state');
                 await setDoc(docRef, {
                     users: state.users,
                     students: state.students,
@@ -95,17 +154,11 @@
                     attendance: state.attendance,
                     history: state.history
                 }, { merge: true });
+                console.log("Data berhasil disinkronkan ke Cloud.");
             } catch (err) {
-                console.error("Cloud Sync Error:", err);
+                console.error("Gagal Sinkronisasi:", err);
+                showToast("Gagal menyimpan ke Cloud! Cek Rules Firebase.", "error");
             }
-        }
-
-        function showToast(text, type = 'success') {
-            const toast = document.getElementById('toast');
-            toast.innerText = text;
-            toast.style.display = 'block';
-            toast.style.backgroundColor = type === 'success' ? '#10B981' : '#EF4444';
-            setTimeout(() => { toast.style.display = 'none'; }, 3000);
         }
 
         function updateState(newState) {
@@ -113,90 +166,88 @@
             render();
         }
 
-        window.initApp = async () => {
-            try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (err) { console.error("Auth Error:", err); }
-
-            onAuthStateChanged(auth, (user) => {
-                if (user) {
-                    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'siakad_db', 'state_document');
-                    onSnapshot(docRef, (docSnap) => {
-                        if (docSnap.exists()) {
-                            const data = docSnap.data();
-                            updateState({
-                                users: data.users || state.users,
-                                students: data.students || state.students,
-                                grades: data.grades || state.grades,
-                                attendance: data.attendance || state.attendance,
-                                history: data.history || state.history,
-                                isLoading: false
-                            });
-                        } else {
-                            syncToCloud();
-                            updateState({ isLoading: false });
-                        }
-                    }, () => updateState({ isLoading: false }));
-                }
-            });
-        };
+        function showToast(msg, type = 'success') {
+            const t = document.getElementById('toast');
+            if (!t) return;
+            t.innerText = msg;
+            t.style.display = 'block';
+            t.style.backgroundColor = type === 'success' ? '#10B981' : '#EF4444';
+            setTimeout(() => { if(t) t.style.display = 'none'; }, 3000);
+        }
 
         // --- HANDLERS ---
+
         window.handleLogin = (e) => {
             e.preventDefault();
             const u = e.target.username.value;
             const p = e.target.password.value;
             if (state.users[u] && state.users[u].password === p) {
                 updateState({ user: state.users[u], activeTab: 'dashboard' });
-            } else { showToast('Login Gagal!', 'error'); }
+                showToast(`Login Berhasil!`);
+            } else {
+                showToast('Username atau Password Salah!', 'error');
+            }
         };
 
-        window.handleLogout = () => { updateState({ user: null, activeTab: 'dashboard', activeToken: null }); };
-        window.switchTab = (t) => { updateState({ activeTab: t }); };
+        window.handleLogout = () => {
+            updateState({ user: null, activeTab: 'dashboard', activeToken: null });
+        };
+
+        window.switchTab = (tabId) => {
+            updateState({ activeTab: tabId });
+        };
 
         window.generateToken = () => {
             const token = Math.random().toString(36).substring(2, 7).toUpperCase();
             updateState({ activeToken: token, attendedToday: [] });
-            showToast('Token Dibuat');
+            showToast('Token Absensi Berhasil Dibuat');
         };
 
         window.submitToken = async (e) => {
             e.preventDefault();
             const t = e.target.token.value.toUpperCase();
-            if (!state.activeToken) return showToast('Token tidak aktif', 'error');
+            if (!state.activeToken) return showToast('Token belum diaktifkan guru!', 'error');
+            
             if (t === state.activeToken) {
                 if (!state.attendedToday.includes(state.user.id)) {
                     state.attendedToday.push(state.user.id);
-                    const sId = state.user.id;
-                    if (!state.attendance[sId]) state.attendance[sId] = { present: 0, total: 48 };
-                    state.attendance[sId].present += 1;
+                    const sid = state.user.id;
+                    if (!state.attendance[sid]) state.attendance[sid] = { present: 0, total: 48 };
+                    state.attendance[sid].present += 1;
+                    
                     updateState({ attendedToday: state.attendedToday, attendance: state.attendance });
-                    await syncToCloud();
-                    showToast('Berhasil Absen');
-                } else { showToast('Sudah absen hari ini', 'error'); }
-            } else { showToast('Token Salah!', 'error'); }
+                    await pushToCloud();
+                    showToast('Presensi Berhasil!');
+                } else {
+                    showToast('Sudah presensi hari ini!', 'error');
+                }
+            } else {
+                showToast('Token Salah!', 'error');
+            }
         };
 
-        window.updateGrade = async (sId, subject, comp, val) => {
-            const score = Math.min(100, Math.max(0, parseInt(val) || 0));
-            if (!state.grades[sId]) state.grades[sId] = {};
-            if (!state.grades[sId][subject]) state.grades[sId][subject] = {};
-            state.grades[sId][subject][comp] = score;
+        window.updateGradeValue = async (sid, subject, component, value) => {
+            const numVal = Math.min(100, Math.max(0, parseInt(value) || 0));
+            if (!state.grades[sid]) state.grades[sid] = {};
+            if (!state.grades[sid][subject]) state.grades[sid][subject] = {};
+            
+            state.grades[sid][subject][component] = numVal;
             updateState({ grades: state.grades });
-            await syncToCloud();
+            await pushToCloud();
         };
 
-        window.openEditModal = (username) => { updateState({ editingUser: { ...state.users[username], oldUsername: username } }); };
-        window.closeEditModal = () => { updateState({ editingUser: null }); };
+        window.openEditUser = (username) => {
+            updateState({ editingUser: { ...state.users[username], oldUsername: username } });
+        };
 
-        window.saveUser = async (e) => {
+        window.closeModal = () => {
+            updateState({ editingUser: null });
+        };
+
+        window.saveUserData = async (e) => {
             e.preventDefault();
             const f = e.target;
-            const newUser = {
+            const newData = {
                 id: state.editingUser.id,
                 username: f.username.value,
                 password: f.password.value,
@@ -205,284 +256,343 @@
                 subject: f.subject ? f.subject.value : state.editingUser.subject,
                 nis: f.nis ? f.nis.value : state.editingUser.nis
             };
-            if (state.editingUser.oldUsername !== newUser.username && state.users[newUser.username]) return showToast('User sudah ada!', 'error');
-            if (state.editingUser.oldUsername !== newUser.username) delete state.users[state.editingUser.oldUsername];
-            state.users[newUser.username] = newUser;
-            if (newUser.role === 'siswa') {
-                const idx = state.students.findIndex(s => s.id === newUser.id);
-                if (idx !== -1) state.students[idx] = { id: newUser.id, name: newUser.name, nis: newUser.nis };
+
+            if (state.editingUser.oldUsername !== newData.username && state.users[newData.username]) {
+                return showToast('Username sudah digunakan!', 'error');
             }
+
+            if (state.editingUser.oldUsername !== newData.username) {
+                delete state.users[state.editingUser.oldUsername];
+            }
+            state.users[newData.username] = newData;
+
+            if (newData.role === 'siswa') {
+                const idx = state.students.findIndex(s => s.id === newData.id);
+                if (idx !== -1) state.students[idx] = { id: newData.id, name: newData.name, nis: newData.nis };
+            }
+
             updateState({ users: state.users, students: state.students, editingUser: null });
-            await syncToCloud();
-            showToast('Data Diperbarui');
+            await pushToCloud();
+            showToast('Data Disimpan ke Cloud');
         };
 
-        window.addUser = async (role) => {
-            const name = prompt(`Nama ${role}:`);
+        window.addNewUser = async (role) => {
+            const name = prompt(`Nama Lengkap ${role}:`);
             if (!name) return;
-            const username = prompt(`Username:`);
-            if (!username || state.users[username]) return showToast('User tidak valid!', 'error');
+            const un = prompt(`Username untuk login:`);
+            if (!un || state.users[un]) return showToast('Username tidak valid!', 'error');
+            
             const id = (role === 'siswa' ? 's' : 'g') + Date.now();
-            const newUser = { id, username, password: '123', role, name };
+            const newUser = { id, username: un, password: '123', role, name };
+            
             if (role === 'guru') newUser.subject = SUBJECTS[0];
             if (role === 'siswa') {
                 newUser.nis = '10' + (100 + state.students.length);
                 state.students.push({ id, name, nis: newUser.nis });
             }
-            state.users[username] = newUser;
+            
+            state.users[un] = newUser;
             updateState({ users: state.users, students: state.students });
-            await syncToCloud();
+            await pushToCloud();
+            showToast(`${role} ditambahkan.`);
         };
 
-        window.deleteUser = async (u) => {
-            if (!confirm('Hapus user?')) return;
-            const usr = state.users[u];
-            if (usr.role === 'siswa') state.students = state.students.filter(s => s.id !== usr.id);
-            delete state.users[u];
+        window.deleteUserRecord = async (un) => {
+            if (!confirm('Hapus pengguna ini secara permanen?')) return;
+            const u = state.users[un];
+            if (u.role === 'siswa') state.students = state.students.filter(s => s.id !== u.id);
+            delete state.users[un];
             updateState({ users: state.users, students: state.students });
-            await syncToCloud();
+            await pushToCloud();
+            showToast('Dihapus dari Cloud');
         };
 
-        // --- RENDERERS ---
+        // --- RENDERER UI ---
+
         function render() {
             const app = document.getElementById('app');
-            if (state.isLoading) {
-                app.innerHTML = `<div class="flex items-center justify-center min-h-screen bg-blue-900 text-white font-bold"><i class="fas fa-spinner fa-spin mr-3"></i> Memuat Sistem...</div>`;
-                return;
-            }
+            if (state.isLoading) return; 
+
             if (!state.user) {
-                app.innerHTML = getLoginHTML();
+                app.innerHTML = `<div class="flex items-center justify-center min-h-screen bg-login-gradient p-4 w-full">${getLoginLayout()}</div>`;
             } else {
                 app.innerHTML = `
-                <div class="flex flex-col md:flex-row min-h-screen">
-                    ${getSidebarHTML()}
-                    <main class="flex-1 p-4 md:p-8 overflow-y-auto bg-gray-50">
+                <div class="flex flex-col md:flex-row min-h-screen w-full bg-gray-50">
+                    ${getSidebarLayout()}
+                    <main class="flex-1 p-4 md:p-8 overflow-y-auto">
                         <div class="max-w-6xl mx-auto animate-fade-in">
-                            ${getContentHTML()}
+                            ${getContentLayout()}
                         </div>
                     </main>
-                    ${getModalHTML()}
+                    ${getModalLayout()}
                 </div>`;
             }
         }
 
-        function getLoginHTML() {
+        function getLoginLayout() {
             return `
-            <div class="flex items-center justify-center min-h-screen bg-blue-900 p-4">
-                <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-fade-in">
-                    <div class="bg-blue-600 p-10 text-center text-white">
-                        <i class="fas fa-university text-6xl mb-4"></i>
-                        <h1 class="text-3xl font-black">SIAKAD v3.4</h1>
-                        <p class="opacity-70 text-sm">Sistem Informasi Akademik Sekolah</p>
+            <div class="bg-white rounded-[40px] shadow-2xl w-full max-w-md overflow-hidden animate-fade-in border-4 border-white/20">
+                <div class="bg-blue-600 p-12 text-center text-white relative">
+                    <div class="bg-white w-24 h-24 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl text-blue-600">
+                        <i class="fas fa-university text-5xl"></i>
                     </div>
-                    <form onsubmit="handleLogin(event)" class="p-10 space-y-6">
-                        <div>
-                            <label class="text-[10px] font-black text-blue-600 uppercase tracking-widest">Username</label>
-                            <input type="text" name="username" required class="w-full border-b-2 py-3 focus:border-blue-500 outline-none transition font-medium">
-                        </div>
-                        <div>
-                            <label class="text-[10px] font-black text-blue-600 uppercase tracking-widest">Password</label>
-                            <input type="password" name="password" required class="w-full border-b-2 py-3 focus:border-blue-500 outline-none transition font-medium">
-                        </div>
-                        <button class="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl shadow-xl hover:bg-blue-700 transition transform active:scale-95">LOGIN</button>
-                    </form>
-                    <div class="p-4 bg-gray-50 text-center text-[10px] text-gray-400 font-bold uppercase">Demo: admin/123 • guru/123 • siswa/123</div>
+                    <h1 class="text-4xl font-black italic tracking-tighter">SIAKAD v4.5</h1>
+                    <p class="opacity-80 text-xs mt-2 uppercase font-black tracking-widest">${state.isOffline ? 'OFFLINE MODE' : 'CLOUD CONNECTED'}</p>
                 </div>
+                <form onsubmit="window.handleLogin(event)" class="p-10 space-y-8">
+                    <div>
+                        <label class="text-[10px] font-black text-blue-600 uppercase tracking-widest">Username</label>
+                        <input type="text" name="username" required class="w-full border-b-2 border-gray-100 py-3 focus:border-blue-500 outline-none font-bold text-gray-700 bg-transparent">
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-black text-blue-600 uppercase tracking-widest">Password</label>
+                        <input type="password" name="password" required class="w-full border-b-2 border-gray-100 py-3 focus:border-blue-500 outline-none font-bold text-gray-700 bg-transparent">
+                    </div>
+                    <button class="w-full bg-blue-600 text-white font-black py-6 rounded-[24px] shadow-xl hover:bg-blue-700 transition transform active:scale-95 uppercase">MASUK</button>
+                </form>
             </div>`;
         }
 
-        function getSidebarHTML() {
+        function getSidebarLayout() {
             const u = state.user;
-            const nav = [{ id: 'dashboard', label: 'Dashboard', icon: 'fa-th-large' }];
+            const nav = [{ id: 'dashboard', label: 'Beranda', icon: 'fa-home' }];
             if (u.role === 'admin') {
-                nav.push({ id: 'manage_guru', label: 'Data Guru', icon: 'fa-chalkboard-teacher' }, { id: 'manage_siswa', label: 'Data Siswa', icon: 'fa-user-graduate' });
+                nav.push({ id: 'guru', label: 'Data Guru', icon: 'fa-user-tie' }, { id: 'siswa', label: 'Data Siswa', icon: 'fa-user-graduate' });
             } else {
-                nav.push({ id: 'absensi', label: 'Absensi', icon: 'fa-calendar-check' }, { id: 'nilai', label: 'Nilai Pelajaran', icon: 'fa-star' });
+                nav.push({ id: 'absen', label: 'Presensi', icon: 'fa-calendar-check' }, { id: 'nilai', label: 'Nilai Akademik', icon: 'fa-star' });
             }
             return `
             <aside class="w-full md:w-72 bg-white border-r border-gray-100 flex flex-col shadow-sm">
-                <div class="p-8 border-b flex items-center space-x-3 text-blue-600">
-                    <div class="bg-blue-600 p-2 rounded-xl text-white"><i class="fas fa-graduation-cap"></i></div>
-                    <span class="font-black text-2xl tracking-tighter italic">SIAKAD</span>
+                <div class="p-10 border-b border-gray-50 flex items-center space-x-4 text-blue-600">
+                    <div class="bg-blue-600 p-3 rounded-2xl text-white shadow-lg"><i class="fas fa-graduation-cap"></i></div>
+                    <span class="font-black text-2xl italic">SIAKAD</span>
                 </div>
-                <nav class="p-6 flex-1 space-y-2">
+                <nav class="p-6 flex-1 space-y-3">
                     ${nav.map(i => `
-                        <button onclick="switchTab('${i.id}')" class="w-full flex items-center space-x-4 px-5 py-4 rounded-2xl transition font-bold text-sm ${state.activeTab===i.id?'bg-blue-600 text-white shadow-lg shadow-blue-200':'text-gray-400 hover:bg-gray-50 hover:text-blue-600'}">
-                            <i class="fas ${i.icon} w-6"></i><span>${i.label}</span>
+                        <button onclick="window.switchTab('${i.id}')" class="w-full flex items-center space-x-5 px-6 py-5 rounded-[20px] transition font-bold text-sm ${state.activeTab===i.id?'bg-blue-600 text-white shadow-xl shadow-blue-100':'text-gray-400 hover:bg-gray-50 hover:text-blue-600'}">
+                            <i class="fas ${i.icon} w-6 text-center"></i><span>${i.label}</span>
                         </button>
                     `).join('')}
                 </nav>
-                <div class="p-6 border-t">
-                    <div class="bg-gray-50 p-4 rounded-2xl flex items-center space-x-3">
-                        <div class="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 font-black">${u.name[0]}</div>
-                        <div class="flex-1 min-w-0 text-left">
-                            <p class="text-[11px] font-black truncate">${u.name}</p>
-                            <p class="text-[9px] text-gray-400 uppercase font-black">${u.role} ${u.subject?`• ${u.subject}`:''}</p>
+                <div class="p-6 border-t border-gray-50">
+                    <div class="bg-gray-50 p-5 rounded-[24px] flex items-center justify-between border border-gray-100 overflow-hidden">
+                        <div class="truncate mr-2">
+                            <p class="text-[12px] font-black truncate">${u.name}</p>
+                            <p class="text-[9px] text-gray-400 uppercase font-bold tracking-widest">${u.role}</p>
                         </div>
-                        <button onclick="handleLogout()" class="text-red-400 hover:text-red-600"><i class="fas fa-power-off"></i></button>
+                        <button onclick="window.handleLogout()" class="text-red-400 hover:text-red-600 p-2"><i class="fas fa-power-off"></i></button>
                     </div>
                 </div>
             </aside>`;
         }
 
-        function getContentHTML() {
+        function getContentLayout() {
             const u = state.user;
-            switch(state.activeTab) {
-                case 'dashboard':
-                    return `
-                        <h2 class="text-3xl font-black mb-8 text-gray-800">Beranda</h2>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                            <div class="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
-                                <p class="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-2">Profil</p>
-                                <h3 class="text-2xl font-black">${u.name}</h3>
-                                <div class="mt-4 flex gap-2">
-                                    <span class="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter">${u.role}</span>
-                                    ${u.subject ? `<span class="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter">${u.subject}</span>` : ''}
-                                </div>
-                            </div>
-                            ${u.role === 'siswa' ? `
-                                <div class="bg-blue-600 p-8 rounded-3xl text-white shadow-xl shadow-blue-100">
-                                    <p class="text-blue-200 text-[10px] font-black uppercase mb-2">Kehadiran Semester Ini</p>
-                                    <h3 class="text-4xl font-black">${Math.round((state.attendance[u.id]?.present/state.attendance[u.id]?.total)*100) || 0}%</h3>
-                                    <p class="mt-2 text-xs opacity-70 italic font-medium">${state.attendance[u.id]?.present || 0} dari ${state.attendance[u.id]?.total || 48} hari masuk.</p>
-                                </div>
-                            ` : ''}
-                        </div>`;
-                case 'manage_guru':
-                    const gurus = Object.keys(state.users).filter(k => state.users[k].role === 'guru');
-                    return `
-                        <div class="flex justify-between items-center mb-8">
-                            <h2 class="text-3xl font-black">Data Guru</h2>
-                            <button onclick="addUser('guru')" class="bg-blue-600 text-white px-6 py-3 rounded-2xl font-bold shadow-md hover:bg-blue-700">Tambah Guru</button>
+            
+            if (state.activeTab === 'dashboard') {
+                return `
+                <div class="mb-10"><h2 class="text-4xl font-black text-gray-800">Ringkasan</h2></div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div class="md:col-span-2 bg-white p-10 rounded-[40px] shadow-sm border border-gray-100 relative group">
+                        <p class="text-blue-600 text-[10px] font-black uppercase tracking-widest mb-4">Profil Saya</p>
+                        <h3 class="text-3xl font-black text-gray-800 mb-6">${u.name}</h3>
+                        <div class="flex flex-wrap gap-3">
+                            <span class="bg-blue-50 text-blue-700 px-5 py-2 rounded-2xl text-[11px] font-black uppercase">Role: ${u.role}</span>
+                            ${u.subject ? `<span class="bg-indigo-50 text-indigo-700 px-5 py-2 rounded-2xl text-[11px] font-black uppercase">Mapel: ${u.subject}</span>` : ''}
+                            ${u.nis ? `<span class="bg-green-50 text-green-700 px-5 py-2 rounded-2xl text-[11px] font-black uppercase text-xs">NIS: ${u.nis}</span>` : ''}
                         </div>
-                        <div class="bg-white rounded-3xl border shadow-sm overflow-hidden">
-                            <table class="w-full text-left">
-                                <thead class="bg-gray-50 border-b"><tr class="text-[10px] font-black text-gray-400 uppercase tracking-widest"><th class="p-6">Nama</th><th class="p-6">Mapel</th><th class="p-6 text-center">Aksi</th></tr></thead>
-                                <tbody class="divide-y divide-gray-50">
-                                    ${gurus.map(k => `<tr><td class="p-6 font-bold text-gray-700">${state.users[k].name}</td><td class="p-6 font-black text-indigo-600 text-xs">${state.users[k].subject}</td><td class="p-6 text-center space-x-2">
-                                        <button onclick="openEditModal('${k}')" class="text-blue-500 bg-blue-50 w-8 h-8 rounded-xl"><i class="fas fa-edit"></i></button>
-                                        <button onclick="deleteUser('${k}')" class="text-red-500 bg-red-50 w-8 h-8 rounded-xl"><i class="fas fa-trash"></i></button>
-                                    </td></tr>`).join('')}
-                                </tbody>
-                            </table>
-                        </div>`;
-                case 'manage_siswa':
-                    const siswas = Object.keys(state.users).filter(k => state.users[k].role === 'siswa');
-                    return `
-                        <div class="flex justify-between items-center mb-8">
-                            <h2 class="text-3xl font-black">Data Siswa</h2>
-                            <button onclick="addUser('siswa')" class="bg-green-600 text-white px-6 py-3 rounded-2xl font-bold shadow-md hover:bg-green-700">Tambah Siswa</button>
-                        </div>
-                        <div class="bg-white rounded-3xl border shadow-sm overflow-hidden">
-                            <table class="w-full text-left">
-                                <thead class="bg-gray-50 border-b"><tr class="text-[10px] font-black text-gray-400 uppercase tracking-widest"><th class="p-6">NIS</th><th class="p-6">Nama</th><th class="p-6 text-center">Aksi</th></tr></thead>
-                                <tbody class="divide-y divide-gray-50">
-                                    ${siswas.map(k => `<tr><td class="p-6 font-black text-blue-600">${state.users[k].nis}</td><td class="p-6 font-bold text-gray-700">${state.users[k].name}</td><td class="p-6 text-center space-x-2">
-                                        <button onclick="openEditModal('${k}')" class="text-blue-500 bg-blue-50 w-8 h-8 rounded-xl"><i class="fas fa-edit"></i></button>
-                                        <button onclick="deleteUser('${k}')" class="text-red-500 bg-red-50 w-8 h-8 rounded-xl"><i class="fas fa-trash"></i></button>
-                                    </td></tr>`).join('')}
-                                </tbody>
-                            </table>
-                        </div>`;
-                case 'absensi':
-                    if (u.role === 'guru') {
-                        return `
-                        <h2 class="text-3xl font-black mb-8 text-gray-800">Absensi - ${u.subject}</h2>
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                            <div class="bg-white p-12 rounded-3xl border shadow-sm text-center">
-                                <p class="text-gray-400 font-black text-[10px] uppercase mb-4 tracking-widest">Token Hari Ini</p>
-                                <div class="text-6xl font-black text-blue-600 mb-8 font-mono">${state.activeToken || '-----'}</div>
-                                <button onclick="generateToken()" class="bg-blue-600 text-white px-10 py-4 rounded-2xl font-bold">GENERATE TOKEN</button>
-                            </div>
-                            <div class="bg-white rounded-3xl border shadow-sm overflow-hidden flex flex-col">
-                                <div class="p-6 bg-gray-50 border-b font-black text-[10px] text-gray-400 uppercase">Rekap Kehadiran Semester Ini</div>
-                                <div class="overflow-y-auto max-h-[300px]">
-                                    <table class="w-full text-left text-sm">
-                                        <tbody class="divide-y divide-gray-50">
-                                            ${state.students.map(s => {
-                                                const att = state.attendance[s.id] || { present: 0, total: 48 };
-                                                const pct = Math.round((att.present/att.total)*100);
-                                                return `<tr><td class="p-4 font-bold text-gray-700">${s.name}</td><td class="p-4 text-gray-400 text-xs">${att.present}/${att.total} Hr</td><td class="p-4 text-right"><span class="px-3 py-1 rounded-full text-[10px] font-black ${pct>80?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}">${pct}%</span></td></tr>`;
-                                            }).join('')}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="mt-8 bg-amber-50 p-8 rounded-3xl border border-amber-100">
-                            <h4 class="font-black text-amber-700 text-xs uppercase mb-4 tracking-widest"><i class="fas fa-history mr-2"></i>History Semester Sebelumnya</h4>
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                ${state.students.map(s => {
-                                    const h = state.history[s.id] || { avg: 0, attendance: '0%' };
-                                    return `<div class="bg-white p-4 rounded-2xl border border-amber-100 text-[11px] font-bold flex justify-between shadow-sm text-amber-800"><span>${s.name}</span><span class="opacity-50">Nilai: ${h.avg} | Abs: ${h.attendance}</span></div>`;
-                                }).join('')}
-                            </div>
-                        </div>`;
-                    } else {
-                        return `
-                        <h2 class="text-3xl font-black mb-8 text-gray-800">Presensi Kehadiran</h2>
-                        <div class="bg-white p-12 rounded-3xl shadow-sm max-w-md mx-auto text-center border">
-                            <div class="w-20 h-20 bg-blue-50 text-blue-600 rounded-3xl flex items-center justify-center mx-auto mb-6 text-3xl shadow-inner"><i class="fas fa-fingerprint"></i></div>
-                            <form onsubmit="submitToken(event)" class="space-y-6">
-                                <input type="text" name="token" maxlength="5" placeholder="_____" required class="w-full text-center text-5xl font-black tracking-[0.5em] uppercase border-b-4 focus:border-blue-600 outline-none p-4 font-mono transition bg-transparent">
-                                <button class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black shadow-xl">ABSEN SEKARANG</button>
-                            </form>
-                        </div>`;
-                    }
-                case 'nilai':
-                    if (u.role === 'guru') {
-                        return `
-                        <h2 class="text-3xl font-black mb-8 text-gray-800">Input Nilai: ${u.subject}</h2>
-                        <div class="bg-white rounded-3xl border shadow-sm overflow-x-auto">
-                            <table class="w-full text-left min-w-[900px]">
-                                <thead class="bg-gray-50 border-b"><tr class="text-[10px] font-black text-gray-400 uppercase tracking-widest"><th class="p-6">Siswa</th>${GRADE_COMPONENTS.map(c => `<th class="p-6 text-center">${c.label}</th>`).join('')}<th class="p-6 text-center bg-blue-50 text-blue-600">Total Akhir</th></tr></thead>
-                                <tbody class="divide-y divide-gray-50">
-                                    ${state.students.map(s => {
-                                        const sGrades = (state.grades[s.id] && state.grades[s.id][u.subject]) || {};
-                                        let sum = 0;
-                                        const inputs = GRADE_COMPONENTS.map(c => {
-                                            const val = sGrades[c.id] || 0;
-                                            sum += val;
-                                            return `<td class="p-4"><input type="number" value="${val}" onchange="updateGrade('${s.id}','${u.subject}','${c.id}',this.value)" class="w-full text-center p-3 bg-gray-50 rounded-xl focus:bg-white border-2 border-transparent focus:border-blue-500 outline-none transition font-black text-sm"></td>`;
-                                        }).join('');
-                                        const avg = Math.round(sum / GRADE_COMPONENTS.length);
-                                        return `<tr><td class="p-6"><p class="font-black text-gray-800">${s.name}</p><p class="text-[10px] text-gray-400 font-bold uppercase tracking-tighter">NIS: ${s.nis}</p></td>${inputs}<td class="p-6 text-center"><span class="bg-blue-600 text-white px-5 py-2 rounded-xl font-black shadow-lg shadow-blue-100">${avg}</span></td></tr>`;
-                                    }).join('')}
-                                </tbody>
-                            </table>
-                        </div>`;
-                    } else {
-                        return `
-                        <h2 class="text-3xl font-black mb-8 text-gray-800">Laporan Hasil Belajar</h2>
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            ${SUBJECTS.map(sub => {
-                                const g = (state.grades[u.id] && state.grades[u.id][sub]) || null;
-                                let avg = g ? Math.round(GRADE_COMPONENTS.reduce((s, c) => s + (g[c.id] || 0), 0) / GRADE_COMPONENTS.length) : 0;
-                                return `<div class="bg-white p-8 rounded-3xl border shadow-sm hover:border-blue-500 transition duration-300"><div class="flex justify-between items-center mb-6"><h4 class="font-black text-gray-800">${sub}</h4><div class="text-2xl font-black ${avg>=75?'text-green-600':'text-red-500'}">${avg || '-'}</div></div><div class="space-y-4">${GRADE_COMPONENTS.map(c => `<div class="space-y-1"><div class="flex justify-between text-[9px] font-black uppercase text-gray-400 tracking-wider"><span>${c.label}</span><span>${g?g[c.id]||0:0}</span></div><div class="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden"><div class="bg-blue-600 h-full transition-all duration-1000" style="width:${g?g[c.id]||0:0}%"></div></div></div>`).join('')}</div></div>`;
+                    </div>
+                    <div class="bg-blue-600 p-10 rounded-[40px] text-white shadow-2xl shadow-blue-200">
+                        <p class="text-blue-200 text-[10px] font-black uppercase mb-2">Siswa Aktif</p>
+                        <h3 class="text-5xl font-black">${state.students.length} Orang</h3>
+                    </div>
+                </div>`;
+            }
+
+            if (state.activeTab === 'guru') {
+                const gurus = Object.keys(state.users).filter(k => state.users[k].role === 'guru');
+                return `
+                <div class="flex justify-between items-center mb-10">
+                    <h2 class="text-4xl font-black text-gray-800 tracking-tight">Data Guru</h2>
+                    <button onclick="window.addNewUser('guru')" class="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black text-xs shadow-xl shadow-blue-100"><i class="fas fa-plus mr-3"></i> Tambah Guru</button>
+                </div>
+                <div class="bg-white rounded-[32px] border border-gray-100 overflow-hidden shadow-sm">
+                    <table class="w-full text-left">
+                        <thead class="bg-gray-50 border-b border-gray-100"><tr class="text-[10px] font-black text-gray-400 uppercase tracking-widest"><th class="p-8">Identitas</th><th class="p-8">Mapel</th><th class="p-8">Username / Pass</th><th class="p-8 text-center">Aksi</th></tr></thead>
+                        <tbody class="divide-y divide-gray-50">
+                            ${gurus.map(k => {
+                                const g = state.users[k];
+                                return `<tr><td class="p-8 font-black text-gray-800">${g.name}</td><td class="p-8 text-indigo-600 font-bold uppercase text-[10px]">${g.subject}</td><td class="p-8 font-mono text-xs text-gray-400">${g.username} / ${g.password}</td><td class="p-8 text-center space-x-2"><button onclick="window.openEditUser('${k}')" class="bg-blue-50 text-blue-500 w-10 h-10 rounded-xl"><i class="fas fa-edit"></i></button><button onclick="window.deleteUserRecord('${k}')" class="bg-red-50 text-red-500 w-10 h-10 rounded-xl"><i class="fas fa-trash"></i></button></td></tr>`;
                             }).join('')}
-                        </div>`;
-                    }
-                default: return '';
+                        </tbody>
+                    </table>
+                </div>`;
+            }
+
+            if (state.activeTab === 'siswa') {
+                return `
+                <div class="flex justify-between items-center mb-10">
+                    <h2 class="text-4xl font-black text-gray-800">Data Siswa</h2>
+                    <button onclick="window.addNewUser('siswa')" class="bg-green-600 text-white px-8 py-4 rounded-2xl font-black text-xs shadow-xl shadow-green-100"><i class="fas fa-plus mr-3"></i> Tambah Siswa</button>
+                </div>
+                <div class="bg-white rounded-[32px] border border-gray-100 overflow-hidden shadow-sm">
+                    <table class="w-full text-left">
+                        <thead class="bg-gray-50 border-b border-gray-100"><tr class="text-[10px] font-black text-gray-400 uppercase tracking-widest"><th class="p-8">NIS</th><th class="p-8">Nama Lengkap</th><th class="p-8">Login Info</th><th class="p-8 text-center">Aksi</th></tr></thead>
+                        <tbody class="divide-y divide-gray-50">
+                            ${state.students.map(s => {
+                                const uData = Object.values(state.users).find(usr => usr.id === s.id) || {};
+                                return `<tr><td class="p-8 font-black text-blue-600">${s.nis}</td><td class="p-8 font-bold text-gray-800">${s.name}</td><td class="p-8 font-mono text-xs text-gray-400 italic">${uData.username || '---'} / ${uData.password || '---'}</td><td class="p-8 text-center space-x-2"><button onclick="window.openEditUser('${uData.username}')" class="bg-blue-50 text-blue-500 w-10 h-10 rounded-xl"><i class="fas fa-edit"></i></button><button onclick="window.deleteUserRecord('${uData.username}')" class="bg-red-50 text-red-500 w-10 h-10 rounded-xl"><i class="fas fa-trash"></i></button></td></tr>`;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>`;
+            }
+
+            if (state.activeTab === 'absen') {
+                if (u.role === 'guru') {
+                    return `
+                    <h2 class="text-4xl font-black text-gray-800 mb-10 tracking-tight">Presensi Kehadiran - ${u.subject}</h2>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                        <div class="bg-white p-12 rounded-[40px] border shadow-sm text-center">
+                            <p class="text-gray-400 text-[10px] font-black uppercase mb-6 tracking-widest">Token Aktif Hari Ini</p>
+                            <div class="text-7xl font-black text-blue-600 mb-10 font-mono tracking-widest">${state.activeToken || '-----'}</div>
+                            <button onclick="window.generateToken()" class="bg-blue-600 text-white px-12 py-5 rounded-3xl font-black shadow-xl shadow-blue-100 uppercase text-sm">Buat Token Baru</button>
+                        </div>
+                        <div class="bg-white rounded-[40px] border shadow-sm overflow-hidden flex flex-col">
+                            <div class="p-8 bg-gray-50 border-b font-black text-[11px] text-gray-400 uppercase flex items-center"><i class="fas fa-history mr-3 text-blue-600"></i> Kehadiran Semester Ini</div>
+                            <div class="overflow-y-auto max-h-[300px] no-scrollbar">
+                                <table class="w-full text-left">
+                                    <tbody class="divide-y divide-gray-50">
+                                        ${state.students.map(s => {
+                                            const att = state.attendance[s.id] || { present: 0, total: 48 };
+                                            return `<tr class="hover:bg-gray-50/50"><td class="p-5 font-bold text-gray-700 text-sm">${s.name}</td><td class="p-5 text-gray-400 font-bold text-xs">${att.present}/${att.total} Hari</td><td class="p-5 text-right"><span class="px-3 py-1 bg-green-50 text-green-700 rounded-full font-black text-[10px]">${Math.round((att.present/att.total)*100)}%</span></td></tr>`;
+                                        }).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>`;
+                } else {
+                    return `
+                    <div class="max-w-xl mx-auto text-center mt-10">
+                        <h2 class="text-4xl font-black text-gray-800 mb-4">Presensi Mandiri</h2>
+                        <p class="text-gray-400 mb-10 font-medium italic">Masukkan 5-digit token dari guru untuk mencatat kehadiran.</p>
+                        <div class="bg-white p-16 rounded-[50px] shadow-2xl border-4 border-white">
+                            <div class="bg-blue-50 w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-10 text-blue-600 text-3xl animate-pulse"><i class="fas fa-fingerprint"></i></div>
+                            <form onsubmit="window.submitToken(event)" class="space-y-10">
+                                <input type="text" name="token" maxlength="5" placeholder="_____" required class="w-full text-center text-6xl font-black border-none outline-none p-4 bg-transparent tracking-[0.4em] uppercase font-mono">
+                                <button class="w-full bg-blue-600 text-white py-6 rounded-3xl font-black shadow-2xl shadow-blue-200 uppercase">Kirim Presensi</button>
+                            </form>
+                        </div>
+                    </div>`;
+                }
+            }
+
+            if (state.activeTab === 'nilai') {
+                if (u.role === 'guru') {
+                    return `
+                    <h2 class="text-4xl font-black text-gray-800 mb-10 tracking-tight">Penginputan Nilai: ${u.subject}</h2>
+                    <div class="bg-white rounded-[40px] border border-gray-100 shadow-sm overflow-x-auto no-scrollbar">
+                        <table class="w-full text-left min-w-[1000px]">
+                            <thead class="bg-gray-50 border-b"><tr class="text-[10px] font-black text-gray-400 uppercase tracking-widest"><th class="p-8">Siswa</th>${GRADE_COMPONENTS.map(c => `<th class="p-8 text-center">${c.label}</th>`).join('')}<th class="p-8 text-center text-blue-600 bg-blue-50/30">Rata-rata</th></tr></thead>
+                            <tbody class="divide-y divide-gray-50">
+                                ${state.students.map(s => {
+                                    const g = (state.grades[s.id] && state.grades[s.id][u.subject]) || {};
+                                    let sum = 0;
+                                    const cells = GRADE_COMPONENTS.map(c => {
+                                        const score = g[c.id] || 0; sum += score;
+                                        return `<td class="p-4"><input type="number" min="0" max="100" value="${score}" onchange="window.updateGradeValue('${s.id}','${u.subject}','${c.id}',this.value)" class="w-full text-center p-4 bg-gray-50 rounded-2xl focus:bg-white border-2 border-transparent focus:border-blue-500 outline-none font-black text-blue-600"></td>`;
+                                    }).join('');
+                                    const avg = Math.round(sum / GRADE_COMPONENTS.length);
+                                    return `<tr><td class="p-8 font-black text-gray-800">${s.name}<br><span class="text-[9px] text-gray-400 uppercase tracking-widest font-bold">NIS: ${s.nis}</span></td>${cells}<td class="p-8 text-center"><span class="bg-blue-600 text-white w-14 h-14 rounded-2xl flex items-center justify-center mx-auto font-black shadow-xl">${avg}</span></td></tr>`;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>`;
+                } else {
+                    return `
+                    <h2 class="text-4xl font-black text-gray-800 mb-10 tracking-tight">Rapor Hasil Belajar</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        ${SUBJECTS.map(sub => {
+                            const g = (state.grades[u.id] && state.grades[u.id][sub]) || null;
+                            let total = 0; if (g) GRADE_COMPONENTS.forEach(c => total += (g[c.id] || 0));
+                            const avg = g ? Math.round(total / GRADE_COMPONENTS.length) : 0;
+                            return `
+                            <div class="bg-white p-10 rounded-[40px] border border-gray-100 shadow-sm hover:border-blue-500 transition duration-500">
+                                <div class="flex justify-between items-start mb-8">
+                                    <div class="bg-blue-50 w-12 h-12 rounded-2xl flex items-center justify-center text-blue-600 text-lg"><i class="fas fa-book"></i></div>
+                                    <div class="text-right"><p class="text-[10px] font-black text-gray-300 uppercase tracking-widest">Skor Akhir</p><p class="text-3xl font-black ${avg>=75?'text-green-600':'text-red-500'}">${avg || '-'}</p></div>
+                                </div>
+                                <h4 class="font-black text-gray-800 text-xl mb-8">${sub}</h4>
+                                <div class="space-y-6">${GRADE_COMPONENTS.map(c => `<div class="space-y-2"><div class="flex justify-between items-center text-[10px] font-black uppercase text-gray-400"><span>${c.label}</span><span>${g?g[c.id]||0:0}</span></div><div class="w-full bg-gray-50 h-1.5 rounded-full overflow-hidden"><div class="bg-blue-600 h-full transition-all duration-1000" style="width:${g?g[c.id]||0:0}%"></div></div></div>`).join('')}</div>
+                            </div>`;
+                        }).join('')}
+                    </div>`;
+                }
             }
         }
 
-        function getModalHTML() {
+        function getModalLayout() {
             if (!state.editingUser) return '';
             const u = state.editingUser;
             return `
-            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-blue-900/60 backdrop-blur-sm animate-fade-in text-left">
-                <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden">
-                    <div class="bg-blue-600 p-6 flex justify-between items-center text-white"><h3 class="font-black uppercase tracking-tighter">Edit Akun ${u.role}</h3><button onclick="closeEditModal()"><i class="fas fa-times"></i></button></div>
-                    <form onsubmit="saveUser(event)" class="p-8 space-y-5">
-                        <div><label class="text-[10px] font-black text-blue-600 uppercase tracking-widest">Nama Lengkap</label><input type="text" name="name" value="${u.name}" required class="w-full border-b-2 py-2 focus:border-blue-500 outline-none font-bold"></div>
-                        ${u.role==='guru'?`<div><label class="text-[10px] font-black text-blue-600 uppercase tracking-widest">Mata Pelajaran</label><select name="subject" class="w-full border-b-2 py-2 outline-none font-bold bg-transparent">${SUBJECTS.map(s => `<option value="${s}" ${u.subject===s?'selected':''}>${s}</option>`).join('')}</select></div>` : `<div><label class="text-[10px] font-black text-blue-600 uppercase tracking-widest">NIS</label><input type="text" name="nis" value="${u.nis}" required class="w-full border-b-2 py-2 focus:border-blue-500 outline-none font-bold"></div>`}
-                        <div><label class="text-[10px] font-black text-blue-600 uppercase tracking-widest">Username</label><input type="text" name="username" value="${u.username}" required class="w-full border-b-2 py-2 outline-none font-bold text-gray-400"></div>
-                        <div><label class="text-[10px] font-black text-blue-600 uppercase tracking-widest">Password Baru</label><input type="text" name="password" value="${u.password}" required class="w-full border-b-2 py-2 outline-none font-bold text-blue-600"></div>
-                        <button class="w-full bg-blue-600 text-white font-black py-4 rounded-2xl shadow-xl mt-4 hover:bg-blue-700 transition">SIMPAN PERUBAHAN</button>
+            <div class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-blue-900/60 backdrop-blur-md animate-fade-in">
+                <div class="bg-white rounded-[40px] shadow-2xl w-full max-w-lg overflow-hidden border-4 border-white">
+                    <div class="bg-blue-600 p-8 flex justify-between items-center text-white"><h3 class="font-black uppercase tracking-widest text-sm">Edit Data ${u.role}</h3><button onclick="window.closeModal()"><i class="fas fa-times"></i></button></div>
+                    <form onsubmit="window.saveUserData(event)" class="p-10 space-y-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="md:col-span-2"><label class="text-[10px] font-black text-blue-600 uppercase tracking-widest ml-1">Nama Lengkap</label><input type="text" name="name" value="${u.name}" required class="w-full border-b-2 py-3 focus:border-blue-500 outline-none font-bold text-gray-700 bg-transparent"></div>
+                            ${u.role==='guru'?`<div class="md:col-span-2"><label class="text-[10px] font-black text-blue-600 uppercase tracking-widest ml-1">Mapel</label><select name="subject" class="w-full border-b-2 py-3 outline-none font-bold bg-transparent">${SUBJECTS.map(s => `<option value="${s}" ${u.subject===s?'selected':''}>${s}</option>`).join('')}</select></div>` : `<div class="md:col-span-2"><label class="text-[10px] font-black text-blue-600 uppercase tracking-widest ml-1">NIS</label><input type="text" name="nis" value="${u.nis}" required class="w-full border-b-2 py-3 focus:border-blue-500 outline-none font-bold text-gray-700 bg-transparent"></div>`}
+                            <div><label class="text-[10px] font-black text-blue-600 uppercase tracking-widest ml-1">Username Login</label><input type="text" name="username" value="${u.username}" required class="w-full border-b-2 py-3 outline-none font-bold text-gray-400 bg-transparent" readonly></div>
+                            <div><label class="text-[10px] font-black text-blue-600 uppercase tracking-widest ml-1">Password Baru</label><input type="text" name="password" value="${u.password}" required class="w-full border-b-2 py-3 focus:border-blue-500 outline-none font-bold text-blue-600 bg-transparent"></div>
+                        </div>
+                        <button class="w-full bg-blue-600 text-white font-black py-5 rounded-3xl shadow-xl hover:bg-blue-700 transition transform active:scale-95 uppercase text-sm mt-6">Simpan Perubahan</button>
                     </form>
                 </div>
             </div>`;
         }
+
+        // --- SISTEM INISIALISASI ---
+
+        const bootSystem = async () => {
+            try {
+                const firebaseApp = initializeApp(firebaseConfig);
+                auth = getAuth(firebaseApp);
+                db = getFirestore(firebaseApp);
+                await signInAnonymously(auth);
+
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        const docRef = doc(db, 'siakad_data', 'main_records', 'v4_5_system', 'global_state');
+                        onSnapshot(docRef, (snap) => {
+                            if (snap.exists()) {
+                                const cloudData = snap.data();
+                                updateState({
+                                    users: cloudData.users || INITIAL_DB.users,
+                                    students: cloudData.students || INITIAL_DB.students,
+                                    grades: cloudData.grades || INITIAL_DB.grades,
+                                    attendance: cloudData.attendance || INITIAL_DB.attendance,
+                                    history: cloudData.history || INITIAL_DB.history,
+                                    isLoading: false
+                                });
+                            } else {
+                                pushToCloud();
+                                updateState({ isLoading: false });
+                            }
+                        }, (err) => { 
+                            console.error("Firestore Error:", err); 
+                            window.forceDemoMode();
+                        });
+                    }
+                });
+            } catch (err) { 
+                console.error("Boot Error:", err); 
+                window.forceDemoMode();
+            }
+        };
+
+        bootSystem();
+
     </script>
 </body>
 </html>
